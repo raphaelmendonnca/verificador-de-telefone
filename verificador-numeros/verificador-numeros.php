@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Verificador de Números
  * Description: Plugin para verificação de números de WhatsApp cadastrados.
- * Version: 0.1.4 beta
+ * Version: 1.0
  * Author: Rapha Mendonça
  * Author URI: https://raphamendonca.com
  * Text Domain: verificador-numeros
