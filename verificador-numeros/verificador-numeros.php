@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Verificador de Números
  * Description: Plugin para verificação de números de WhatsApp cadastrados.
- * Version: 1.0
+ * Version: 0.1.4 beta
  * Author: Rapha Mendonça
  * Author URI: https://raphamendonca.com
  * Text Domain: verificador-numeros
@@ -251,8 +251,10 @@ class VerificadorNumeros {
                 if (!empty($data[0])) {
                     $numero = preg_replace('/[^0-9]/', '', $data[0]);
                     if (strlen($numero) === 11) {
-                        $this->adicionar_numero($numero);
-                        $count++;
+                        $result = $this->adicionar_numero($numero);
+                        if ($result !== 'duplicate') {
+                            $count++;
+                        }
                     }
                 }
             }
@@ -348,12 +350,23 @@ class VerificadorNumeros {
     }
 
     public function adicionar_numero($numero) {
-        $numero = preg_replace('/[^0-9]/', '', $numero);
+        $numero_limpo = preg_replace('/[^0-9]/', '', $numero);
         
         global $wpdb;
+        
+        // Verificar se já existe
+        $exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$this->table_name} WHERE numero = %s",
+            $numero_limpo
+        ));
+        
+        if ($exists) {
+            return 'duplicate';
+        }
+        
         return $wpdb->insert(
             $this->table_name,
-            array('numero' => $numero),
+            array('numero' => $numero_limpo),
             array('%s')
         );
     }
@@ -409,7 +422,7 @@ class VerificadorNumeros {
     }
 }
 
-// Função AJAX do admin modificada
+// Funções AJAX do admin
 add_action('wp_ajax_add_numero', 'admin_add_numero');
 function admin_add_numero() {
     check_ajax_referer('add_numero_action', 'nonce');
@@ -418,27 +431,33 @@ function admin_add_numero() {
     }
 
     $numero = sanitize_text_field($_POST['numero']);
-    $numero_limpo = preg_replace('/[^0-9]/', '', $numero);
-    
-    // Verificar se o número já existe antes de tentar inserir
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'verificador_numeros';
-    $exists = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM {$table_name} WHERE numero = %s",
-        $numero_limpo
-    ));
-    
-    if ($exists) {
-        wp_send_json_error(array('message' => 'Este número já está cadastrado na base de dados.'));
-        return;
-    }
-    
     $instance = VerificadorNumeros::get_instance();
     
-    if ($instance->adicionar_numero($numero_limpo)) {
+    $result = $instance->adicionar_numero($numero);
+    
+    if ($result === 'duplicate') {
+        wp_send_json_error(array('message' => 'Este número já está cadastrado na base de dados.'));
+    } else if ($result) {
         wp_send_json_success();
     } else {
         wp_send_json_error(array('message' => 'Erro ao adicionar número.'));
+    }
+}
+
+add_action('wp_ajax_delete_numero', 'admin_delete_numero');
+function admin_delete_numero() {
+    check_ajax_referer('delete_numero_nonce', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(array('message' => 'Permissão negada.'));
+    }
+
+    $id = intval($_POST['id']);
+    $instance = VerificadorNumeros::get_instance();
+    
+    if ($instance->excluir_numero($id)) {
+        wp_send_json_success();
+    } else {
+        wp_send_json_error(array('message' => 'Erro ao excluir número.'));
     }
 }
 
